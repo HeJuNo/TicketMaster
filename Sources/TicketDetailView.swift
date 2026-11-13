@@ -4,11 +4,12 @@ struct TicketDetailView: View {
     @Environment(AppModel.self) private var model
     @State var ticket: Ticket
     @State private var articles: [Article] = []
-    @State private var agents: [User] = []
     @State private var draft = ""
     @State private var kind = ArticleDraft.Kind.reply
     @State private var sending = false
     @State private var error: String?
+    @State private var scrolled = false
+    @AppStorage("showTicketDetails") private var showDetails = true
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -19,8 +20,11 @@ struct TicketDetailView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: articles.last?.id) { _, id in
-                if let id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } }
+                guard let id else { return }
+                // First load: start at the newest article's top so it reads from its first line; the header stays one swipe up.
+                if scrolled { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } else { proxy.scrollTo(id, anchor: .top); scrolled = true }
             }
         }
         .safeAreaInset(edge: .bottom) { composer }
@@ -37,18 +41,27 @@ struct TicketDetailView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(ticket.title).font(.title2.bold())
             HStack(spacing: 8) {
                 StateBadge(state: ticket.state)
-                if let priority = ticket.priority { Text(priority).font(.caption).foregroundStyle(.secondary) }
+                if let priority = ticket.priority { PriorityLabel(name: priority) }
+                Spacer()
+                Text("\(articles.count) \(articles.count == 1 ? "article" : "articles")").font(.caption).foregroundStyle(.secondary)
             }
-            LabeledContent("Customer", value: ticket.customer ?? "–")
-            LabeledContent("Group", value: ticket.group ?? "–")
-            LabeledContent("Owner", value: isUnassigned ? "Unassigned" : ticket.owner ?? "–")
+            DisclosureGroup("Details", isExpanded: $showDetails) {
+                VStack(spacing: 6) {
+                    LabeledContent("Customer", value: ticket.customer ?? "–")
+                    LabeledContent("Group", value: ticket.group ?? "–")
+                    LabeledContent("Owner", value: isUnassigned ? "Unassigned" : ticket.owner ?? "–")
+                    LabeledContent("Updated") { Text(ticket.updatedAt, format: .dateTime.day().month().year().hour().minute()) }
+                }
+                .padding(.top, 6)
+            }
+            .font(.subheadline)
         }
-        .font(.subheadline)
-        .padding(.bottom, 8)
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
     }
 
     private var isUnassigned: Bool { ticket.ownerId == User.nobodyID || ticket.owner == "-" }
@@ -56,7 +69,7 @@ struct TicketDetailView: View {
 
     /// Agents for the "Assign to" list: those with access to the ticket's group, and always the user themselves.
     private var assignable: [User] {
-        var list = agents.filter { $0.canOwn(groupID: ticket.groupId) && $0.id != model.me?.id }
+        var list = model.agents.filter { $0.canOwn(groupID: ticket.groupId) && $0.id != model.me?.id }
         list.sort { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
         return list
     }
@@ -95,31 +108,28 @@ struct TicketDetailView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            Menu {
-                Picker("Type", selection: $kind) {
-                    ForEach(ArticleDraft.Kind.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+        VStack(spacing: 8) {
+            Picker("Type", selection: $kind) {
+                ForEach(ArticleDraft.Kind.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(kind == .reply ? "Write a reply…" : "Write an internal note…", text: $draft, axis: .vertical)
+                    .lineLimit(1...6)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(kind == .note ? Color.orange.opacity(0.12) : Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+                Button {
+                    Task { await send() }
+                } label: {
+                    Image(systemName: sending ? "ellipsis.circle.fill" : "arrow.up.circle.fill").font(.system(size: 34))
                 }
-            } label: {
-                Image(systemName: kind.symbol).frame(width: 36, height: 36)
+                .tint(kind == .note ? .orange : .accentColor)
+                .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Send")
             }
-            .accessibilityLabel("Article Type: \(kind.label)")
-            TextField(kind.label, text: $draft, axis: .vertical)
-                .lineLimit(1...6)
-                .padding(.vertical, 8)
-            Button {
-                Task { await send() }
-            } label: {
-                Image(systemName: sending ? "ellipsis" : "arrow.up").font(.body.bold()).frame(width: 36, height: 36)
-            }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.circle)
-            .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("Send")
         }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .glassEffect(in: .rect(cornerRadius: 24))
-        .padding(.horizontal).padding(.bottom, 8)
+        .padding(.horizontal).padding(.vertical, 8)
+        .background(.bar)
     }
 
     /// Replies go to whoever last wrote as customer, as in the Zammad web app.
@@ -137,7 +147,7 @@ struct TicketDetailView: View {
             self.error = error.localizedDescription
         }
         // Optional: without permission to list users, "Assign to Me" and "Unassign" still work.
-        if agents.isEmpty, let users = try? await client.users() { agents = users }
+        await model.loadAgents()
     }
 
     private func send() async {
@@ -179,6 +189,7 @@ struct ArticleView: View {
             if article.internal {
                 Label("Internal", systemImage: "lock.fill").font(.caption.weight(.medium)).foregroundStyle(.orange)
             }
+            if let to = article.to, !article.internal { Text("To: \(to)").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             Text(article.text).textSelection(.enabled)
         }
         .padding(12)

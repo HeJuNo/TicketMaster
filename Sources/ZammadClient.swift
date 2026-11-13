@@ -176,23 +176,16 @@ struct ZammadClient {
 
     // MARK: Endpoints
 
-    /// Groups the signed-in user can see, from the session the web app also preloads them from.
-    func groups() async throws -> [TicketGroup] {
-        let info: SessionInfo = try await send("signshow")
-        return info.groups
+    func overviews() async throws -> [Overview] { try await send("ticket_overviews") }
+
+    func tickets(in overview: Overview, states: [TicketState], priorities: [TicketPriority]) async throws -> [Ticket] {
+        let result: OverviewResult = try await send("ticket_overviews", query: [.init(name: "view", value: overview.link)])
+        return result.tickets(states: states, priorities: priorities)
     }
 
     func me() async throws -> User { try await send("users/me") }
     func states() async throws -> [TicketState] { try await send("ticket_states") }
     func priorities() async throws -> [TicketPriority] { try await send("ticket_priorities") }
-
-    func searchTickets(_ query: String, limit: Int = 100) async throws -> [Ticket] {
-        try await send("tickets/search", query: [
-            .init(name: "query", value: query), .init(name: "limit", value: "\(limit)"),
-            .init(name: "expand", value: "true"),
-            .init(name: "sort_by", value: "updated_at"), .init(name: "order_by", value: "desc"),
-        ])
-    }
 
     func ticket(_ id: Int) async throws -> Ticket {
         try await send("tickets/\(id)", query: [.init(name: "expand", value: "true")])

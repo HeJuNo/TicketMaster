@@ -15,6 +15,7 @@ struct Ticket: Codable, Identifiable, Hashable {
     var ownerId: Int?
     var groupId: Int?
     var articleCount: Int?
+    var createdAt: Date?
     var updatedAt: Date
 }
 
@@ -73,41 +74,55 @@ struct User: Codable, Identifiable, Hashable {
     }
 }
 
-/// A Zammad group, the "queue" tickets are sorted into. Nested groups are named "Parent::Child".
-struct TicketGroup: Codable, Identifiable, Hashable {
+/// A Zammad overview (saved ticket filter) as listed in the web app's sidebar, with its ticket count.
+struct Overview: Codable, Identifiable, Hashable {
     let id: Int
     var name: String
-    var active: Bool?
-
-    var title: String { name.replacing("::", with: " › ") }
+    var prio: Int?
+    var link: String
+    var count: Int?
 }
 
-/// What the tickets list is scoped to.
-enum Queue: Hashable, Identifiable {
-    case all
-    case group(TicketGroup)
+/// Answer of `GET /api/v1/ticket_overviews?view=<link>`: ticket ids in overview order, records in `assets`.
+/// Assets carry ids only (no state or customer names), so the names are looked up here.
+struct OverviewResult: Decodable {
+    var assets: Assets
+    var index: Index
 
-    var id: Int { if case .group(let g) = self { g.id } else { 0 } }
-    var title: String { if case .group(let g) = self { g.title } else { "All Queues" } }
-    var groupID: Int? { if case .group(let g) = self { g.id } else { nil } }
-}
-
-/// Answer of `GET /api/v1/signshow`: the current user plus the records the web app preloads (groups the user can access).
-struct SessionInfo: Decodable {
-    var session: User?
-    var assets: Assets?
-
+    struct Index: Decodable { var tickets: [Ref] }
+    struct Ref: Decodable { var id: Int }
     struct Assets: Decodable {
-        var groups: [String: TicketGroup]?
-        enum CodingKeys: String, CodingKey { case groups = "Group" }
+        var tickets: [String: Record]?
+        var users: [String: User]?
+        var groups: [String: Group]?
+        enum CodingKeys: String, CodingKey { case tickets = "Ticket", users = "User", groups = "Group" }
+    }
+    struct Group: Decodable { var name: String }
+    struct Record: Decodable {
+        var id: Int
+        var number: String
+        var title: String
+        var stateId: Int
+        var priorityId: Int
+        var groupId: Int?
+        var ownerId: Int?
+        var customerId: Int?
+        var articleCount: Int?
+        var createdAt: Date?
+        var updatedAt: Date
     }
 
-    /// Active groups the user has access to, by name. Works for agents; `GET /groups` needs admin rights.
-    var groups: [TicketGroup] {
-        let access = session?.groupIds
-        return (assets?.groups ?? [:]).values
-            .filter { $0.active != false && (access == nil || access?[String($0.id)] != nil) }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    func tickets(states: [TicketState], priorities: [TicketPriority]) -> [Ticket] {
+        index.tickets.compactMap { ref in
+            guard let r = assets.tickets?[String(ref.id)] else { return nil }
+            return Ticket(
+                id: r.id, number: r.number, title: r.title, stateId: r.stateId, priorityId: r.priorityId,
+                state: states.first { $0.id == r.stateId }?.name, priority: priorities.first { $0.id == r.priorityId }?.name,
+                group: r.groupId.flatMap { assets.groups?[String($0)]?.name },
+                customer: r.customerId.flatMap { assets.users?[String($0)]?.displayName },
+                owner: r.ownerId == User.nobodyID ? "-" : r.ownerId.flatMap { assets.users?[String($0)]?.displayName },
+                ownerId: r.ownerId, groupId: r.groupId, articleCount: r.articleCount, createdAt: r.createdAt, updatedAt: r.updatedAt)
+        }
     }
 }
 
@@ -144,22 +159,33 @@ struct ArticleDraft: Encodable {
     }
 }
 
-enum TicketFilter: String, CaseIterable, Identifiable {
-    case open = "Open", mine = "Assigned to Me", all = "All"
+/// Ways to order a ticket list. `server` keeps the order of the Zammad overview.
+enum TicketSort: String, CaseIterable, Identifiable {
+    case server = "Overview Order", updated = "Last Updated", created = "Created", number = "Number", priority = "Priority", title = "Title"
     var id: Self { self }
 
-    static let openStates = #"state.name:(new OR open OR "pending reminder" OR "pending close")"#
+    /// Direction a freshly chosen sort starts in: newest and most urgent first, titles A to Z.
+    var startsAscending: Bool { self == .title }
 
-    /// Elasticsearch query string for `GET /api/v1/tickets/search`.
-    func query(search: String, meID: Int?, groupID: Int? = nil) -> String {
-        let scope: String? = switch self {
-        case .open: Self.openStates
-        case .mine: "\(Self.openStates) AND owner_id:\(meID ?? 0)"
-        case .all: nil
+    func apply(_ tickets: [Ticket], ascending: Bool) -> [Ticket] {
+        if self == .server { return tickets }
+        let sorted: [Ticket] = switch self {
+        case .server: tickets
+        case .updated: tickets.sorted { $0.updatedAt < $1.updatedAt }
+        case .created: tickets.sorted { ($0.createdAt ?? $0.updatedAt) < ($1.createdAt ?? $1.updatedAt) }
+        case .number: tickets.sorted { $0.number.localizedStandardCompare($1.number) == .orderedAscending }
+        case .priority: tickets.sorted { ($0.priorityId, $0.updatedAt) < ($1.priorityId, $1.updatedAt) }  // same priority: by update time
+        case .title: tickets.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         }
-        let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        let others = [scope, groupID.map { "group_id:\($0)" }].compactMap { $0 }
-        let clauses = (text.isEmpty ? [] : [others.isEmpty ? text : "(\(text))"]) + others
-        return clauses.isEmpty ? "*" : clauses.joined(separator: " AND ")
+        return ascending ? sorted : sorted.reversed()
+    }
+}
+
+extension Ticket {
+    /// Search over what a row shows: title, number, customer, owner and group.
+    func matches(_ text: String) -> Bool {
+        let words = text.split(separator: " ")
+        let haystack = [title, number, customer, owner, group].compactMap { $0 }.joined(separator: " ")
+        return words.allSatisfy { haystack.localizedCaseInsensitiveContains($0) }
     }
 }

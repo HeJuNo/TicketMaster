@@ -40,11 +40,14 @@ enum Demo {
         case ("GET", "/api/v1/users/search"): return (200, users, [:])
         case ("GET", "/api/v1/ticket_states"): return (200, states, [:])
         case ("GET", "/api/v1/ticket_priorities"): return (200, priorities, [:])
-        case ("GET", "/api/v1/tickets/search"):
-            let query = request.url?.query(percentEncoded: false) ?? ""
-            let group = query.firstMatch(of: /group_id:(\d+)/).map { String($0.1) }
-            let shown = tickets.filter { group == nil || $0.contains(#""group_id":\#(group!),"#) }
-            return (200, "[\(shown.joined(separator: ","))]", [:])
+        case ("GET", "/api/v1/ticket_overviews"):
+            let view = request.url?.query(percentEncoded: false)?.firstMatch(of: /view=(\w+)/).map { String($0.1) }
+            switch view {
+            case nil: return (200, overviews, [:])
+            case "my_assigned": return (200, overviewView([2, 3]), [:])
+            case "all_open": return (200, overviewView([1]), [:])
+            default: return (404, #"{"error":"Not Found"}"#, [:])
+            }
         case ("GET", "/api/v1/tickets/2"), ("PUT", "/api/v1/tickets/2"): return (200, tickets[1], [:])
         case ("GET", "/api/v1/ticket_articles/by_ticket/2"): return (200, articles, [:])
         case ("POST", "/api/v1/ticket_articles"): return (201, created, [:])
@@ -53,13 +56,33 @@ enum Demo {
     }
 
     nonisolated static let me = #"{"id":3,"firstname":"Emma","lastname":"Taylor","email":"emma@chrispresso.com","login":"emma@chrispresso.com"}"#
-    /// Emma has access to Sales and Service Desk, not to 2nd Level (which still appears in the preloaded records).
     nonisolated static let session = #"""
     {"session":{"id":3,"firstname":"Emma","lastname":"Taylor","email":"emma@chrispresso.com","group_ids":{"1":["full"],"3":["full"]}},
-     "assets":{"Group":{"1":{"id":1,"name":"Sales","active":true},"2":{"id":2,"name":"2nd Level","active":true},
-                        "3":{"id":3,"name":"Service Desk","active":true},"4":{"id":4,"name":"Old","active":false}}},
      "config":{}}
     """#
+
+    nonisolated static let overviews = #"""
+    [{"id":2,"name":"Open","prio":1100,"link":"all_open","count":1},
+     {"id":1,"name":"My assigned Tickets","prio":1000,"link":"my_assigned","count":2}]
+    """#
+
+    /// Shape of the real answer: ticket ids in `index`, records without names in `assets`.
+    nonisolated static func overviewView(_ ids: [Int]) -> String {
+        let records = [
+            1: #""1":{"id":1,"number":"22001","title":"Welcome to Zammad!","state_id":1,"priority_id":2,"group_id":1,"owner_id":1,"customer_id":11,"article_count":1,"updated_at":"2026-11-13T08:51:13.809Z"}"#,
+            2: #""2":{"id":2,"number":"22002","title":"Order 777555","state_id":2,"priority_id":2,"group_id":1,"owner_id":3,"customer_id":10,"article_count":2,"created_at":"2026-11-01T10:00:00.000Z","updated_at":"2026-11-13T07:57:17.927Z"}"#,
+            3: #""3":{"id":3,"number":"22003","title":"Espresso machine leaks water","state_id":3,"priority_id":2,"group_id":3,"owner_id":3,"customer_id":12,"article_count":2,"updated_at":"2026-11-12T16:20:00.000Z"}"#,
+        ]
+        return #"""
+        {"assets":{"Ticket":{\#(ids.compactMap { records[$0] }.joined(separator: ","))},
+          "User":{"3":{"id":3,"firstname":"Emma","lastname":"Taylor","email":"emma@chrispresso.com"},
+                  "10":{"id":10,"firstname":"David","lastname":"Bell","email":"david@example.com"},
+                  "11":{"id":11,"firstname":"Nicole","lastname":"Braun","email":"nicole.braun@zammad.org"},
+                  "12":{"id":12,"firstname":"","lastname":"","email":"lena@example.com"}},
+          "Group":{"1":{"id":1,"name":"Sales"},"3":{"id":3,"name":"Service Desk"}}},
+         "index":{"overview":{"id":1},"count":\#(ids.count),"tickets":[\#(ids.map { #"{"id":\#($0),"updated_at":"2026-11-13T08:00:00.000Z"}"# }.joined(separator: ","))]}}
+        """#
+    }
 
     nonisolated static let users = #"""
     [\#(me.dropLast()),"active":true,"roles":["Agent"],"group_ids":{"1":["full"]}},

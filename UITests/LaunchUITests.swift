@@ -10,8 +10,8 @@ final class LaunchUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Service Desk"].waitForExistence(timeout: 10))  // queues come first
-        app.buttons["All Queues"].tap()
+        XCTAssertTrue(app.staticTexts["My assigned Tickets"].waitForExistence(timeout: 10))  // overviews come first
+        element(app, containing: "My assigned Tickets").tap()
         let ticket = element(app, containing: "Order 777555")
         XCTAssertTrue(ticket.waitForExistence(timeout: 10))
         ticket.tap()
@@ -48,6 +48,6 @@ final class LaunchUITests: XCTestCase {
         password.tap()
         password.typeText("secret")
         app.buttons["Sign In"].tap()
-        XCTAssertTrue(app.staticTexts["Sales"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["My assigned Tickets"].waitForExistence(timeout: 10))
     }
 }

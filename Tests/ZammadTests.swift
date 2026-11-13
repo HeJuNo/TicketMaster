@@ -41,26 +41,41 @@ import Testing
         #expect(users[0].displayName == "Emma Taylor")
     }
 
-    @Test func queuesAreTheGroupsTheUserCanAccess() async throws {
-        let groups = try await Demo.client.groups()
-        #expect(groups.map(\.title) == ["Sales", "Service Desk"])  // no 2nd Level (no access), no inactive group
-        #expect(Queue.group(groups[1]).groupID == 3 && Queue.all.groupID == nil)
-        #expect(TicketGroup(id: 9, name: "Support::Level 2", active: true).title == "Support › Level 2")
+    @Test func overviewsListLikeTheWebApp() async throws {
         let model = AppModel()
         try await model.connect(Demo.client)
-        #expect(model.groups.count == 2)
-        let desk = try await Demo.client.searchTickets(TicketFilter.all.query(search: "", meID: 3, groupID: 3))
-        #expect(desk.map(\.number) == ["22003", "22004"] && desk.allSatisfy { $0.group == "Service Desk" })
+        #expect(model.overviews.map(\.link).sorted() == ["all_open", "my_assigned"] && model.overviews.first { $0.link == "my_assigned" }?.count == 2)
+        let mine = try #require(model.overviews.first { $0.link == "my_assigned" })
+        let tickets = try await Demo.client.tickets(in: mine, states: model.states, priorities: model.priorities)
+        #expect(tickets.map(\.number) == ["22002", "22003"])  // overview order
+        #expect(tickets[0].state == "open" && tickets[0].priority == "2 normal" && tickets[0].customer == "David Bell")
+        #expect(tickets[0].group == "Sales" && tickets[0].owner == "Emma Taylor" && tickets[1].customer == "lena@example.com")
+        let all = try #require(model.overviews.first { $0.link == "all_open" })
+        let unowned = try await Demo.client.tickets(in: all, states: model.states, priorities: model.priorities)
+        #expect(unowned[0].owner == "-")  // "nobody" like the expanded API
     }
 
-    @Test func filterQueries() {
-        #expect(TicketFilter.all.query(search: "  ", meID: 3) == "*")
-        #expect(TicketFilter.all.query(search: "order", meID: 3) == "order")
-        #expect(TicketFilter.mine.query(search: "", meID: 3) == TicketFilter.openStates + " AND owner_id:3")
-        #expect(TicketFilter.open.query(search: "order", meID: nil) == "(order) AND " + TicketFilter.openStates)
-        #expect(TicketFilter.all.query(search: "", meID: nil, groupID: 3) == "group_id:3")
-        #expect(TicketFilter.all.query(search: "order", meID: nil, groupID: 3) == "(order) AND group_id:3")
-        #expect(TicketFilter.mine.query(search: "", meID: 3, groupID: 3) == TicketFilter.openStates + " AND owner_id:3 AND group_id:3")
+    @Test func ticketListSortsAndSearches() async throws {
+        let model = AppModel()
+        try await model.connect(Demo.client)
+        let overview = try #require(model.overviews.first { $0.link == "my_assigned" })
+        let tickets = try await Demo.client.tickets(in: overview, states: model.states, priorities: model.priorities)  // 22002, 22003
+        #expect(TicketSort.server.apply(tickets, ascending: false).map(\.number) == ["22002", "22003"])  // never reordered
+        #expect(TicketSort.updated.apply(tickets, ascending: false).map(\.number) == ["22002", "22003"])  // newest first
+        #expect(TicketSort.updated.apply(tickets, ascending: true).map(\.number) == ["22003", "22002"])
+        #expect(TicketSort.title.apply(tickets, ascending: true).map(\.number) == ["22003", "22002"])  // Espresso before Order
+        #expect(TicketSort.number.apply(tickets, ascending: false).map(\.number) == ["22003", "22002"])
+        #expect(tickets[0].matches("order david") && !tickets[0].matches("espresso") && tickets[1].matches("SERVICE desk"))
+    }
+
+    @Test func agentsAreLoadedOnceForAllTickets() async throws {
+        let model = AppModel()
+        try await model.connect(Demo.client)
+        await model.loadAgents()
+        #expect(model.agents.count == 6)
+        model.agents = []  // a second call after sign-out must reload, not reuse
+        await model.loadAgents()
+        #expect(model.agents.count == 6)
     }
 
     @Test func connectLoadsUserStatesAndTickets() async throws {
@@ -68,9 +83,6 @@ import Testing
         try await model.connect(Demo.client)
         #expect(model.me?.displayName == "Emma Taylor")
         #expect(!model.states.contains { $0.name == "merged" })
-        let tickets = try await Demo.client.searchTickets("*")
-        #expect(tickets.map(\.number) == ["22001", "22002", "22003", "22004"])
-        #expect(tickets[1].state == "open" && tickets[1].customer == "david@example.com")
         let articles = try await Demo.client.articles(ticket: 2)
         #expect(articles.count == 3 && articles[1].internal)
         #expect(articles[0].createdAt == ISO8601DateFormatter().date(from: "2026-11-12T11:57:18Z")!.addingTimeInterval(0.068))

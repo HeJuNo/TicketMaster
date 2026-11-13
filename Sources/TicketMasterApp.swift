@@ -25,7 +25,7 @@ struct TicketMasterApp: App {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @State private var queue: Queue?
+    @State private var overview: Overview?
     @State private var selection: Ticket?
 
     var body: some View {
@@ -33,13 +33,13 @@ struct RootView: View {
             LoginView()
         } else {
             NavigationSplitView {
-                QueueListView(selection: $queue)
+                OverviewListView(selection: $overview)
             } content: {
-                if let queue {
-                    TicketListView(queue: queue, selection: $selection).id(queue)
+                if let overview {
+                    TicketListView(overview: overview, selection: $selection).id(overview)
                 } else {
-                    ContentUnavailableView("No Queue Selected", systemImage: "tray.2",
-                                           description: Text("Choose a queue to see its tickets."))
+                    ContentUnavailableView("No Overview Selected", systemImage: "tray.2",
+                                           description: Text("Choose an overview to see its tickets."))
                 }
             } detail: {
                 if let selection {
@@ -49,13 +49,13 @@ struct RootView: View {
                                            description: Text("Choose a ticket from the list."))
                 }
             }
-            .onChange(of: queue) { selection = nil }
+            .onChange(of: overview) { selection = nil }
             #if DEBUG
             .task {  // -demoTicket 2: open that ticket right away (screenshots)
                 let id = UserDefaults.standard.integer(forKey: "demoTicket")
                 if id > 0, let t = try? await model.client?.ticket(id) {
-                    queue = .all
-                    try? await Task.sleep(for: .milliseconds(300))  // let the queue change clear the old selection first
+                    overview = model.overviews.first
+                    try? await Task.sleep(for: .milliseconds(300))  // let the overview change clear the old selection first
                     selection = t
                 }
             }

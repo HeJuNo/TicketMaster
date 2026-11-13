@@ -15,12 +15,22 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    VStack(spacing: 8) {
+                        Image(systemName: "ticket.fill").font(.system(size: 44)).foregroundStyle(.tint)
+                        Text("Sign in to your Zammad helpdesk.").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                }
                 if let prepared { credentials(prepared) } else { serverStep }
                 if let error {
                     Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
                 }
             }
             .navigationTitle("TicketMaster")
+            .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             .onSubmit { Task { await primaryAction() } }
             .sheet(isPresented: $showMicrosoft) {
                 if let prepared, case .session(let web) = prepared.client.credential {
@@ -98,12 +108,17 @@ struct LoginView: View {
         Button {
             Task { await primaryAction() }
         } label: {
-            HStack {
-                Text(title)
+            HStack(spacing: 8) {
                 Spacer()
                 if busy { ProgressView() }
+                Text(title).fontWeight(.semibold)
+                Spacer()
             }
+            .padding(.vertical, 6)
         }
+        .buttonStyle(.glassProminent)
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 0, trailing: 0))
         .disabled(busy || disabled)
     }
 

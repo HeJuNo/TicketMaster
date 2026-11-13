@@ -6,7 +6,9 @@ import Observation
     var me: User?
     var states: [TicketState] = []
     var priorities: [TicketPriority] = []
-    var groups: [TicketGroup] = []
+    var overviews: [Overview] = []
+    /// Loaded once on first use; every ticket's assign menu needs it.
+    var agents: [User] = []
     /// Replaced by canned answers in debug demo runs.
     var urlSession = ZammadClient.defaultSession
 
@@ -58,14 +60,18 @@ import Observation
         async let me = client.me()
         async let states = client.states()
         async let priorities = client.priorities()
-        async let groups = try? client.groups()  // optional: without it the queue list only offers "All Queues"
-        (self.me, self.states, self.priorities) = try await (me, states.filter(\.active), priorities.filter(\.active))
-        self.groups = await groups ?? []
+        async let overviews = client.overviews()
+        (self.me, self.states, self.priorities, self.overviews) = try await (me, states.filter(\.active), priorities.filter(\.active), overviews)
         self.client = client
     }
 
-    func reloadGroups() async {
-        if let groups = try? await client?.groups() { self.groups = groups }
+    func loadAgents() async {
+        guard agents.isEmpty, let users = try? await client?.users() else { return }
+        agents = users
+    }
+
+    func reloadOverviews() async {
+        if let overviews = try? await client?.overviews() { self.overviews = overviews }
     }
 
     func signOut() {
@@ -74,6 +80,7 @@ import Observation
         Task { await client.signOut() }
         self.client = nil
         me = nil
-        groups = []
+        overviews = []
+        agents = []
     }
 }
