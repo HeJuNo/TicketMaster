@@ -41,11 +41,26 @@ import Testing
         #expect(users[0].displayName == "Emma Taylor")
     }
 
+    @Test func queuesAreTheGroupsTheUserCanAccess() async throws {
+        let groups = try await Demo.client.groups()
+        #expect(groups.map(\.title) == ["Sales", "Service Desk"])  // no 2nd Level (no access), no inactive group
+        #expect(Queue.group(groups[1]).groupID == 3 && Queue.all.groupID == nil)
+        #expect(TicketGroup(id: 9, name: "Support::Level 2", active: true).title == "Support › Level 2")
+        let model = AppModel()
+        try await model.connect(Demo.client)
+        #expect(model.groups.count == 2)
+        let desk = try await Demo.client.searchTickets(TicketFilter.all.query(search: "", meID: 3, groupID: 3))
+        #expect(desk.map(\.number) == ["22003", "22004"] && desk.allSatisfy { $0.group == "Service Desk" })
+    }
+
     @Test func filterQueries() {
         #expect(TicketFilter.all.query(search: "  ", meID: 3) == "*")
         #expect(TicketFilter.all.query(search: "order", meID: 3) == "order")
         #expect(TicketFilter.mine.query(search: "", meID: 3) == TicketFilter.openStates + " AND owner_id:3")
         #expect(TicketFilter.open.query(search: "order", meID: nil) == "(order) AND " + TicketFilter.openStates)
+        #expect(TicketFilter.all.query(search: "", meID: nil, groupID: 3) == "group_id:3")
+        #expect(TicketFilter.all.query(search: "order", meID: nil, groupID: 3) == "(order) AND group_id:3")
+        #expect(TicketFilter.mine.query(search: "", meID: 3, groupID: 3) == TicketFilter.openStates + " AND owner_id:3 AND group_id:3")
     }
 
     @Test func connectLoadsUserStatesAndTickets() async throws {

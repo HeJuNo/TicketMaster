@@ -208,6 +208,7 @@ platform :ios do
       api_key: api_key,
       app_identifier: BUNDLE_ID,
       ipa: "TicketMaster.ipa",
+      changelog: File.read(File.join(__dir__, "release_notes.txt")),
       skip_submission: false,
       skip_waiting_for_build_processing: true
     )

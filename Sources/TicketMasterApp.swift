@@ -25,6 +25,7 @@ struct TicketMasterApp: App {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @State private var queue: Queue?
     @State private var selection: Ticket?
 
     var body: some View {
@@ -32,7 +33,14 @@ struct RootView: View {
             LoginView()
         } else {
             NavigationSplitView {
-                TicketListView(selection: $selection)
+                QueueListView(selection: $queue)
+            } content: {
+                if let queue {
+                    TicketListView(queue: queue, selection: $selection).id(queue)
+                } else {
+                    ContentUnavailableView("No Queue Selected", systemImage: "tray.2",
+                                           description: Text("Choose a queue to see its tickets."))
+                }
             } detail: {
                 if let selection {
                     TicketDetailView(ticket: selection).id(selection.id)
@@ -41,10 +49,15 @@ struct RootView: View {
                                            description: Text("Choose a ticket from the list."))
                 }
             }
+            .onChange(of: queue) { selection = nil }
             #if DEBUG
             .task {  // -demoTicket 2: open that ticket right away (screenshots)
                 let id = UserDefaults.standard.integer(forKey: "demoTicket")
-                if id > 0, let t = try? await model.client?.ticket(id) { selection = t }
+                if id > 0, let t = try? await model.client?.ticket(id) {
+                    queue = .all
+                    try? await Task.sleep(for: .milliseconds(300))  // let the queue change clear the old selection first
+                    selection = t
+                }
             }
             #endif
         }

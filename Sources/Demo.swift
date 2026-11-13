@@ -15,7 +15,9 @@ enum Demo {
         let signedIn = cookie.contains("_zammad_session=signedin")
         let anon = ["Set-Cookie": "_zammad_session=anon; path=/; secure; HttpOnly", "CSRF-Token": "csrf-anon"]
         switch (method, path) {
-        case ("GET", "/api/v1/signshow") where !signedIn:
+        case ("GET", "/api/v1/signshow") where signedIn || request.value(forHTTPHeaderField: "Authorization") == "Token token=demo":
+            return (200, session, signedIn ? ["CSRF-Token": "csrf-in"] : [:])
+        case ("GET", "/api/v1/signshow"):
             return (200, #"{"error":"no valid session","config":{"product_name":"Zammad","auth_microsoft_office365":true}}"#, anon)
         case ("POST", "/api/v1/signin"):
             guard cookie.contains("_zammad_session=anon"), csrf == "csrf-anon" else { return (401, #"{"error":"CSRF token verification failed!"}"#, [:]) }
@@ -38,7 +40,11 @@ enum Demo {
         case ("GET", "/api/v1/users/search"): return (200, users, [:])
         case ("GET", "/api/v1/ticket_states"): return (200, states, [:])
         case ("GET", "/api/v1/ticket_priorities"): return (200, priorities, [:])
-        case ("GET", "/api/v1/tickets/search"): return (200, "[\(tickets.joined(separator: ","))]", [:])
+        case ("GET", "/api/v1/tickets/search"):
+            let query = request.url?.query(percentEncoded: false) ?? ""
+            let group = query.firstMatch(of: /group_id:(\d+)/).map { String($0.1) }
+            let shown = tickets.filter { group == nil || $0.contains(#""group_id":\#(group!),"#) }
+            return (200, "[\(shown.joined(separator: ","))]", [:])
         case ("GET", "/api/v1/tickets/2"), ("PUT", "/api/v1/tickets/2"): return (200, tickets[1], [:])
         case ("GET", "/api/v1/ticket_articles/by_ticket/2"): return (200, articles, [:])
         case ("POST", "/api/v1/ticket_articles"): return (201, created, [:])
@@ -47,6 +53,14 @@ enum Demo {
     }
 
     nonisolated static let me = #"{"id":3,"firstname":"Emma","lastname":"Taylor","email":"emma@chrispresso.com","login":"emma@chrispresso.com"}"#
+    /// Emma has access to Sales and Service Desk, not to 2nd Level (which still appears in the preloaded records).
+    nonisolated static let session = #"""
+    {"session":{"id":3,"firstname":"Emma","lastname":"Taylor","email":"emma@chrispresso.com","group_ids":{"1":["full"],"3":["full"]}},
+     "assets":{"Group":{"1":{"id":1,"name":"Sales","active":true},"2":{"id":2,"name":"2nd Level","active":true},
+                        "3":{"id":3,"name":"Service Desk","active":true},"4":{"id":4,"name":"Old","active":false}}},
+     "config":{}}
+    """#
+
     nonisolated static let users = #"""
     [\#(me.dropLast()),"active":true,"roles":["Agent"],"group_ids":{"1":["full"]}},
      {"id":4,"firstname":"Chris","lastname":"Miller","email":"chris@chrispresso.com","active":true,"roles":["Admin","Agent"],"group_ids":{"1":["read","change"]}},
@@ -65,12 +79,13 @@ enum Demo {
     nonisolated static let tickets = [
         ticket(1, "Welcome to Zammad!", state: (1, "new"), customer: "nicole.braun@zammad.org", owner: "-", updated: "2026-11-13T08:51:13.809Z"),
         ticket(2, "Order 777555", state: (2, "open"), customer: "david@example.com", owner: "emma@chrispresso.com", updated: "2026-11-13T07:57:17.927Z"),
-        ticket(3, "Espresso machine leaks water", state: (3, "pending reminder"), customer: "lena@example.com", owner: "emma@chrispresso.com", updated: "2026-11-12T16:20:00.000Z"),
-        ticket(4, "Invoice 2026-118 missing", state: (2, "open"), customer: "accounting@example.org", owner: "-", updated: "2026-11-10T09:03:41.120Z"),
+        ticket(3, "Espresso machine leaks water", state: (3, "pending reminder"), customer: "lena@example.com", owner: "emma@chrispresso.com", updated: "2026-11-12T16:20:00.000Z", group: (3, "Service Desk")),
+        ticket(4, "Invoice 2026-118 missing", state: (2, "open"), customer: "accounting@example.org", owner: "-", updated: "2026-11-10T09:03:41.120Z", group: (3, "Service Desk")),
     ]
 
-    nonisolated static func ticket(_ id: Int, _ title: String, state: (Int, String), customer: String, owner: String, updated: String) -> String {
-        #"{"id":\#(id),"number":"2200\#(id)","title":"\#(title)","state_id":\#(state.0),"state":"\#(state.1)","priority_id":2,"priority":"2 normal","group":"Sales","customer":"\#(customer)","owner":"\#(owner)","owner_id":\#(owner == "-" ? 1 : 3),"group_id":1,"article_count":2,"created_at":"2026-11-01T11:51:13.759Z","updated_at":"\#(updated)"}"#
+    nonisolated static func ticket(_ id: Int, _ title: String, state: (Int, String), customer: String, owner: String, updated: String,
+                                   group: (Int, String) = (1, "Sales")) -> String {
+        #"{"id":\#(id),"number":"2200\#(id)","title":"\#(title)","state_id":\#(state.0),"state":"\#(state.1)","priority_id":2,"priority":"2 normal","group":"\#(group.1)","customer":"\#(customer)","owner":"\#(owner)","owner_id":\#(owner == "-" ? 1 : 3),"group_id":\#(group.0),"article_count":2,"created_at":"2026-11-01T11:51:13.759Z","updated_at":"\#(updated)"}"#
     }
 
     nonisolated static let articles = #"""

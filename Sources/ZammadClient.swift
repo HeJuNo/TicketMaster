@@ -176,6 +176,12 @@ struct ZammadClient {
 
     // MARK: Endpoints
 
+    /// Groups the signed-in user can see, from the session the web app also preloads them from.
+    func groups() async throws -> [TicketGroup] {
+        let info: SessionInfo = try await send("signshow")
+        return info.groups
+    }
+
     func me() async throws -> User { try await send("users/me") }
     func states() async throws -> [TicketState] { try await send("ticket_states") }
     func priorities() async throws -> [TicketPriority] { try await send("ticket_priorities") }

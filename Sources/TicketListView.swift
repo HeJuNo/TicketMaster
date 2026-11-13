@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TicketListView: View {
     @Environment(AppModel.self) private var model
+    let queue: Queue
     @Binding var selection: Ticket?
     @SceneStorage("filter") private var filter = TicketFilter.open
     @State private var search = ""
@@ -24,7 +25,8 @@ struct TicketListView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(filter.rawValue)
+        .navigationTitle(queue.title)
+        .navigationSubtitle(filter.rawValue)
         .searchable(text: $search, prompt: "Search Tickets")
         .refreshable { await load() }
         .task(id: "\(filter.rawValue)|\(search)") {
@@ -33,14 +35,6 @@ struct TicketListView: View {
             await load()
         }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    if let me = model.me { Text(me.displayName) }
-                    Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { model.signOut() }
-                } label: {
-                    Label("Account", systemImage: "person.crop.circle")
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Picker("Filter", selection: $filter) {
@@ -56,7 +50,7 @@ struct TicketListView: View {
     private func load() async {
         guard let client = model.client else { return }
         do {
-            tickets = try await client.searchTickets(filter.query(search: search, meID: model.me?.id))
+            tickets = try await client.searchTickets(filter.query(search: search, meID: model.me?.id, groupID: queue.groupID))
             error = nil
         } catch is CancellationError {
             return
