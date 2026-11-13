@@ -74,13 +74,13 @@ struct TicketRow: View {
         HStack(spacing: 12) {
             Rectangle().fill(StateColor.color(for: ticket.state)).frame(width: 5)
             VStack(alignment: .leading, spacing: 4) {
-                Text(ticket.title).font(.headline).lineLimit(1)
                 HStack {
                     Text("#\(ticket.number)").monospacedDigit()
                     Spacer()
                     Text(ticket.updatedAt, format: .relative(presentation: .named))
                 }
                 .font(.caption).foregroundStyle(.secondary)
+                Text(ticket.title).font(.headline).lineLimit(1)
                 HStack(spacing: 8) {
                     StateBadge(state: ticket.state)
                     if let customer = ticket.customer { Text(customer).lineLimit(1) }
