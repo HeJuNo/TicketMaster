@@ -28,6 +28,19 @@ import Testing
         #expect(draft.type == "email" && !draft.internal && draft.to == "David <d@example.com>")
     }
 
+    @Test func assigningSendsOnlyTheOwner() throws {
+        let json = try #require(JSONSerialization.jsonObject(with: ZammadClient.encoder.encode(TicketChange(ownerId: 3))) as? [String: Any])
+        #expect(json.keys.sorted() == ["owner_id"] && json["owner_id"] as? Int == 3)
+        #expect(User.nobodyID == 1)
+    }
+
+    @Test func onlyActiveAgentsWithChangeAccessCanOwn() async throws {
+        let users = try await Demo.client.users()
+        #expect(users.filter { $0.canOwn(groupID: 1) }.map(\.id) == [3, 4])  // not read-only, other group, inactive or customer
+        #expect(users.filter { $0.canOwn(groupID: nil) }.map(\.id) == [3, 4, 5, 6])
+        #expect(users[0].displayName == "Emma Taylor")
+    }
+
     @Test func filterQueries() {
         #expect(TicketFilter.all.query(search: "  ", meID: 3) == "*")
         #expect(TicketFilter.all.query(search: "order", meID: 3) == "order")

@@ -16,6 +16,19 @@ final class LaunchUITests: XCTestCase {
         XCTAssertTrue(element(app, containing: "Melange is out of stock").waitForExistence(timeout: 10))
     }
 
+    @MainActor func testOwnerMenuOffersAssignAndUnassign() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-demoTicket", "2"]
+        app.launch()
+        app.buttons["Change State, Priority or Owner"].tap()
+        XCTAssertTrue(app.buttons["Unassign"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Assign to Me"].exists)  // ticket 2 already belongs to the signed-in user
+        app.buttons["Assign to…"].tap()
+        XCTAssertTrue(app.buttons["Chris Miller"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Ben Reader"].exists)  // read-only access to the group
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/tmshots/owner-menu.png"))
+    }
+
     @MainActor func testPasswordSignInShowsTickets() {
         let app = XCUIApplication()
         app.launchArguments = ["-demoLogin", "YES"]

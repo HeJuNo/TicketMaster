@@ -4,6 +4,7 @@ struct TicketDetailView: View {
     @Environment(AppModel.self) private var model
     @State var ticket: Ticket
     @State private var articles: [Article] = []
+    @State private var agents: [User] = []
     @State private var draft = ""
     @State private var kind = ArticleDraft.Kind.reply
     @State private var sending = false
@@ -44,15 +45,43 @@ struct TicketDetailView: View {
             }
             LabeledContent("Customer", value: ticket.customer ?? "–")
             LabeledContent("Group", value: ticket.group ?? "–")
-            LabeledContent("Owner", value: ticket.owner == "-" ? "Unassigned" : ticket.owner ?? "–")
+            LabeledContent("Owner", value: isUnassigned ? "Unassigned" : ticket.owner ?? "–")
         }
         .font(.subheadline)
         .padding(.bottom, 8)
     }
 
+    private var isUnassigned: Bool { ticket.ownerId == User.nobodyID || ticket.owner == "-" }
+    private var isMine: Bool { ticket.ownerId != nil && ticket.ownerId == model.me?.id }
+
+    /// Agents for the "Assign to" list: those with access to the ticket's group, and always the user themselves.
+    private var assignable: [User] {
+        var list = agents.filter { $0.canOwn(groupID: ticket.groupId) && $0.id != model.me?.id }
+        list.sort { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+        return list
+    }
+
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Section("Owner") {
+                    if let me = model.me, !isMine {
+                        Button("Assign to Me", systemImage: "person.crop.circle.badge.checkmark") { Task { await change(ownerID: me.id) } }
+                    }
+                    if !assignable.isEmpty {
+                        Menu("Assign to…", systemImage: "person.2") {
+                            ForEach(assignable) { agent in
+                                Button(agent.displayName) { Task { await change(ownerID: agent.id) } }
+                                    .disabled(agent.id == ticket.ownerId)
+                            }
+                        }
+                    }
+                    if !isUnassigned {
+                        Button("Unassign", systemImage: "person.crop.circle.badge.minus", role: .destructive) {
+                            Task { await change(ownerID: User.nobodyID) }
+                        }
+                    }
+                }
                 Picker("State", selection: Binding(get: { ticket.stateId }, set: { id in Task { await change(stateID: id) } })) {
                     ForEach(model.states) { Text($0.name.capitalized).tag($0.id) }
                 }
@@ -60,7 +89,7 @@ struct TicketDetailView: View {
                     ForEach(model.priorities) { Text($0.name).tag($0.id) }
                 }
             } label: {
-                Label("Change State or Priority", systemImage: "slider.horizontal.3")
+                Label("Change State, Priority or Owner", systemImage: "slider.horizontal.3")
             }
         }
     }
@@ -107,6 +136,8 @@ struct TicketDetailView: View {
         } catch {
             self.error = error.localizedDescription
         }
+        // Optional: without permission to list users, "Assign to Me" and "Unassign" still work.
+        if agents.isEmpty, let users = try? await client.users() { agents = users }
     }
 
     private func send() async {
@@ -122,10 +153,10 @@ struct TicketDetailView: View {
         }
     }
 
-    private func change(stateID: Int? = nil, priorityID: Int? = nil) async {
+    private func change(stateID: Int? = nil, priorityID: Int? = nil, ownerID: Int? = nil) async {
         guard let client = model.client else { return }
         do {
-            ticket = try await client.update(ticket: ticket.id, stateID: stateID, priorityID: priorityID)
+            ticket = try await client.update(ticket: ticket.id, stateID: stateID, priorityID: priorityID, ownerID: ownerID)
         } catch {
             self.error = error.localizedDescription
         }

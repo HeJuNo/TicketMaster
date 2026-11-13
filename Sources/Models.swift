@@ -12,6 +12,8 @@ struct Ticket: Codable, Identifiable, Hashable {
     var group: String?
     var customer: String?
     var owner: String?
+    var ownerId: Int?
+    var groupId: Int?
     var articleCount: Int?
     var updatedAt: Date
 }
@@ -51,11 +53,31 @@ struct User: Codable, Identifiable, Hashable {
     var lastname: String?
     var email: String?
     var login: String?
+    var active: Bool?
+    var roles: [String]?
+    var groupIds: [String: [String]]?
+
+    /// Zammad's "nobody" owner: tickets without an owner belong to this system user.
+    static let nobodyID = 1
+
+    /// Agents who may own tickets of a group (needs "full" or "change" access there).
+    func canOwn(groupID: Int?) -> Bool {
+        guard active != false, roles?.contains("Agent") == true else { return false }
+        guard let groupIds, let groupID else { return true }
+        return groupIds[String(groupID)]?.contains { $0 == "full" || $0 == "change" } == true
+    }
 
     var displayName: String {
         let name = [firstname, lastname].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespaces)
         return name.isEmpty ? (email ?? login ?? "#\(id)") : name
     }
+}
+
+/// Fields sent with `PUT /api/v1/tickets/{id}`; unset ones stay untouched on the server.
+struct TicketChange: Encodable {
+    var stateId: Int?
+    var priorityId: Int?
+    var ownerId: Int?
 }
 
 /// New article for `POST /api/v1/ticket_articles`.

@@ -35,6 +35,7 @@ enum Demo {
         case (_, _) where signedIn && method != "GET" && csrf != "csrf-in":
             return (401, #"{"error":"CSRF token verification failed!"}"#, [:])
         case ("GET", "/api/v1/users/me"): return (200, me, signedIn ? ["CSRF-Token": "csrf-in"] : [:])
+        case ("GET", "/api/v1/users/search"): return (200, users, [:])
         case ("GET", "/api/v1/ticket_states"): return (200, states, [:])
         case ("GET", "/api/v1/ticket_priorities"): return (200, priorities, [:])
         case ("GET", "/api/v1/tickets/search"): return (200, "[\(tickets.joined(separator: ","))]", [:])
@@ -46,6 +47,15 @@ enum Demo {
     }
 
     nonisolated static let me = #"{"id":3,"firstname":"Emma","lastname":"Taylor","email":"emma@chrispresso.com","login":"emma@chrispresso.com"}"#
+    nonisolated static let users = #"""
+    [\#(me.dropLast()),"active":true,"roles":["Agent"],"group_ids":{"1":["full"]}},
+     {"id":4,"firstname":"Chris","lastname":"Miller","email":"chris@chrispresso.com","active":true,"roles":["Admin","Agent"],"group_ids":{"1":["read","change"]}},
+     {"id":5,"firstname":"Ben","lastname":"Reader","email":"ben@chrispresso.com","active":true,"roles":["Agent"],"group_ids":{"1":["read"]}},
+     {"id":6,"firstname":"Olga","lastname":"Other","email":"olga@chrispresso.com","active":true,"roles":["Agent"],"group_ids":{"2":["full"]}},
+     {"id":7,"firstname":"Gone","lastname":"Agent","email":"gone@chrispresso.com","active":false,"roles":["Agent"],"group_ids":{"1":["full"]}},
+     {"id":10,"firstname":"David","lastname":"Bell","email":"david@example.com","active":true,"roles":["Customer"]}]
+    """#
+
     nonisolated static let states = #"""
     [{"id":1,"name":"new","active":true},{"id":2,"name":"open","active":true},{"id":3,"name":"pending reminder","active":true},
      {"id":4,"name":"closed","active":true},{"id":5,"name":"merged","active":false},{"id":7,"name":"pending close","active":true}]
@@ -60,7 +70,7 @@ enum Demo {
     ]
 
     nonisolated static func ticket(_ id: Int, _ title: String, state: (Int, String), customer: String, owner: String, updated: String) -> String {
-        #"{"id":\#(id),"number":"2200\#(id)","title":"\#(title)","state_id":\#(state.0),"state":"\#(state.1)","priority_id":2,"priority":"2 normal","group":"Sales","customer":"\#(customer)","owner":"\#(owner)","article_count":2,"created_at":"2026-11-01T11:51:13.759Z","updated_at":"\#(updated)"}"#
+        #"{"id":\#(id),"number":"2200\#(id)","title":"\#(title)","state_id":\#(state.0),"state":"\#(state.1)","priority_id":2,"priority":"2 normal","group":"Sales","customer":"\#(customer)","owner":"\#(owner)","owner_id":\#(owner == "-" ? 1 : 3),"group_id":1,"article_count":2,"created_at":"2026-11-01T11:51:13.759Z","updated_at":"\#(updated)"}"#
     }
 
     nonisolated static let articles = #"""

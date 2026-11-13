@@ -200,9 +200,14 @@ struct ZammadClient {
         try await send("ticket_articles", method: "POST", query: [.init(name: "expand", value: "true")], body: draft)
     }
 
-    func update(ticket id: Int, stateID: Int? = nil, priorityID: Int? = nil) async throws -> Ticket {
-        struct Change: Encodable { var stateId: Int?; var priorityId: Int? }
-        return try await send("tickets/\(id)", method: "PUT", query: [.init(name: "expand", value: "true")],
-                              body: Change(stateId: stateID, priorityId: priorityID))
+    func update(ticket id: Int, stateID: Int? = nil, priorityID: Int? = nil, ownerID: Int? = nil) async throws -> Ticket {
+        try await send("tickets/\(id)", method: "PUT", query: [.init(name: "expand", value: "true")],
+                       body: TicketChange(stateId: stateID, priorityId: priorityID, ownerId: ownerID))
+    }
+
+    /// Users with roles and group access; the caller keeps those who can own a ticket (`User.canOwn`).
+    func users() async throws -> [User] {
+        try await send("users/search", query: [.init(name: "query", value: "*"), .init(name: "limit", value: "200"),
+                                               .init(name: "expand", value: "true")])
     }
 }
