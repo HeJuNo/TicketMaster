@@ -1,0 +1,72 @@
+# XcodeGen definition – `xcodegen generate` creates TicketMaster.xcodeproj
+name: TicketMaster
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "27.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "27.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    VERSIONING_SYSTEM: apple-generic
+targets:
+  TicketMaster:
+    type: application
+    platform: iOS
+    deploymentTarget: "27.0"
+    sources:
+      - Sources
+      - Resources
+    scheme:
+      testTargets:
+        - TicketMasterTests
+        - TicketMasterUITests
+    settings:
+      base:
+        # Placeholder for local builds; CI sets com.<TEAMID>.ticketmaster or BUNDLE_ID.
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ticketmaster
+        PRODUCT_NAME: TicketMaster
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: TicketMaster
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+  TicketMasterTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "27.0"
+    sources:
+      - Tests
+    dependencies:
+      - target: TicketMaster
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ticketmaster.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+  TicketMasterUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "27.0"
+    sources:
+      - UITests
+    dependencies:
+      - target: TicketMaster
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ticketmaster.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_TARGET_NAME: TicketMaster
