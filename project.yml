@@ -29,7 +29,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.ticketmaster
         PRODUCT_NAME: TicketMaster
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
@@ -42,7 +42,6 @@ targets:
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
-        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
   TicketMasterTests:
     type: bundle.unit-test
     platform: iOS
@@ -55,7 +54,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.ticketmaster.tests
         GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
   TicketMasterUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -68,5 +67,5 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.ticketmaster.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         TEST_TARGET_NAME: TicketMaster
