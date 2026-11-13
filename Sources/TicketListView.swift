@@ -62,6 +62,9 @@ struct TicketListView: View {
             return
         } catch let urlError as URLError where urlError.code == .cancelled {
             return
+        } catch let zammad as ZammadError where zammad.status == 401 {
+            model.signOut()  // session expired on the server
+            return
         } catch {
             self.error = error.localizedDescription
         }

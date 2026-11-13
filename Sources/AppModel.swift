@@ -6,23 +6,51 @@ import Observation
     var me: User?
     var states: [TicketState] = []
     var priorities: [TicketPriority] = []
+    /// Replaced by canned answers in debug demo runs.
+    var urlSession = ZammadClient.defaultSession
 
     private static let serverKey = "server"
 
-    /// Signs in again with the server and token from the last session.
-    func restore() async {
-        guard client == nil, let server = UserDefaults.standard.string(forKey: Self.serverKey),
-              let url = URL(string: server), let token = Keychain.load(account: server) else { return }
-        try? await connect(ZammadClient(baseURL: url, token: token))
+    /// Identifies this device in Zammad's device log, like the browser fingerprint of the web app.
+    static var fingerprint: String {
+        if let value = UserDefaults.standard.string(forKey: "fingerprint") { return value }
+        let value = UUID().uuidString
+        UserDefaults.standard.set(value, forKey: "fingerprint")
+        return value
     }
 
-    func signIn(server: String, token: String) async throws {
-        let url = try ZammadClient.serverURL(server)
-        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { throw ZammadError(message: "Enter your access token.") }
-        try await connect(ZammadClient(baseURL: url, token: token))
-        UserDefaults.standard.set(url.absoluteString, forKey: Self.serverKey)
-        Keychain.save(token, account: url.absoluteString)
+    /// Continues the session from last time, if Zammad still accepts it.
+    func restore() async {
+        guard client == nil, let server = UserDefaults.standard.string(forKey: Self.serverKey),
+              let url = URL(string: server), let data = Keychain.load(account: server),
+              let stored = try? JSONDecoder().decode([StoredCookie].self, from: data) else { return }
+        let web = WebSession(cookies: stored.compactMap(\.cookie))
+        try? await finish(ZammadClient(baseURL: url, credential: .session(web), urlSession: urlSession))
+    }
+
+    /// Step 1 of sign-in: a fresh web session for the server, plus the sign-in methods it offers.
+    func prepare(server: String) async throws -> (ZammadClient, ZammadClient.ServerInfo) {
+        let client = ZammadClient(baseURL: try ZammadClient.serverURL(server), credential: .session(WebSession()), urlSession: urlSession)
+        return (client, try await client.signShow())
+    }
+
+    /// Step 2: username and password. Returns the two-factor method when Zammad asks for a code.
+    func signIn(_ client: ZammadClient, username: String, password: String, twoFactor: (method: String, code: String)? = nil) async throws -> String? {
+        let form = ZammadClient.SignIn(username: username.trimmingCharacters(in: .whitespaces), password: password,
+                                       fingerprint: Self.fingerprint, twoFactorMethod: twoFactor?.method,
+                                       twoFactorPayload: twoFactor?.code.trimmingCharacters(in: .whitespaces))
+        if let method = try await client.signIn(form) { return method }
+        try await finish(client)
+        return nil
+    }
+
+    /// Loads what the app needs and keeps the session for the next start.
+    func finish(_ client: ZammadClient) async throws {
+        try await connect(client)
+        guard case .session(let web) = client.credential else { return }
+        let server = client.baseURL.absoluteString
+        UserDefaults.standard.set(server, forKey: Self.serverKey)
+        if let data = try? JSONEncoder().encode(web.cookies.map(StoredCookie.init)) { Keychain.save(data, account: server) }
     }
 
     func connect(_ client: ZammadClient) async throws {
@@ -34,8 +62,10 @@ import Observation
     }
 
     func signOut() {
-        if let server = client?.baseURL.absoluteString { Keychain.delete(account: server) }
-        client = nil
+        guard let client else { return }
+        Keychain.delete(account: client.baseURL.absoluteString)
+        Task { await client.signOut() }
+        self.client = nil
         me = nil
     }
 }

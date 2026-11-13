@@ -11,6 +11,11 @@ struct TicketMasterApp: App {
                 .task {
                     #if DEBUG
                     if UserDefaults.standard.bool(forKey: "demo") { try? await model.connect(Demo.client); return }
+                    if UserDefaults.standard.bool(forKey: "demoLogin") {  // empty sign-in form against canned answers
+                        ["server", "username"].forEach(UserDefaults.standard.removeObject)
+                        model.urlSession = FixtureProtocol.session
+                        return
+                    }
                     #endif
                     await model.restore()
                 }
