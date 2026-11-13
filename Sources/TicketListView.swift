@@ -13,6 +13,7 @@ struct TicketListView: View {
     var body: some View {
         List(tickets, selection: $selection) { ticket in
             NavigationLink(value: ticket) { TicketRow(ticket: ticket) }
+                .listRowInsets(EdgeInsets())
         }
         .overlay {
             if let error, tickets.isEmpty {
@@ -70,22 +71,38 @@ struct TicketRow: View {
     let ticket: Ticket
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(ticket.title).font(.headline).lineLimit(2)
-                Spacer()
-                Text(ticket.updatedAt, format: .relative(presentation: .named))
-                    .font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            Rectangle().fill(StateColor.color(for: ticket.state)).frame(width: 5)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(ticket.title).font(.headline).lineLimit(1)
+                HStack {
+                    Text("#\(ticket.number)").monospacedDigit()
+                    Spacer()
+                    Text(ticket.updatedAt, format: .relative(presentation: .named))
+                }
+                .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    StateBadge(state: ticket.state)
+                    if let customer = ticket.customer { Text(customer).lineLimit(1) }
+                }
+                .font(.subheadline).foregroundStyle(.secondary)
             }
-            HStack(spacing: 6) {
-                StateBadge(state: ticket.state)
-                Text("#\(ticket.number)").monospacedDigit()
-                if let customer = ticket.customer { Text("· \(customer)").lineLimit(1) }
-            }
-            .font(.subheadline).foregroundStyle(.secondary)
+            .padding(.vertical, 10)
+            .padding(.trailing, 16)
         }
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+}
+
+enum StateColor {
+    static func color(for state: String?) -> Color {
+        switch state {
+        case "new": .blue
+        case "open": .orange
+        case let s? where s.hasPrefix("pending"): .purple
+        case "closed": .green
+        default: .gray
+        }
     }
 }
 
@@ -100,13 +117,5 @@ struct StateBadge: View {
             .background(color.opacity(0.15), in: .capsule)
     }
 
-    private var color: Color {
-        switch state {
-        case "new": .blue
-        case "open": .orange
-        case let s? where s.hasPrefix("pending"): .purple
-        case "closed": .green
-        default: .gray
-        }
-    }
+    private var color: Color { StateColor.color(for: state) }
 }
