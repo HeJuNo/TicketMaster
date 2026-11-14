@@ -7,6 +7,8 @@ import Observation
     var states: [TicketState] = []
     var priorities: [TicketPriority] = []
     var overviews: [Overview] = []
+    /// Last loaded tickets per overview id, shown while the next load runs.
+    var cachedTickets: [Int: [Ticket]] = [:]
     /// Loaded once on first use; every ticket's assign menu needs it.
     var agents: [User] = []
     /// Replaced by canned answers in debug demo runs.

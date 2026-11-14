@@ -51,19 +51,19 @@ struct LoginView: View {
         }
     }
 
-    private var serverStep: some View {
+    @ViewBuilder private var serverStep: some View {
         Section {
             TextField("helpdesk.example.com", text: $server)
                 .textContentType(.URL)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-            actionButton("Continue", disabled: server.isEmpty)
         } header: {
             Text("Zammad Server")
         } footer: {
             Text("The address you use to open Zammad in the browser.")
         }
+        Section { actionButton("Continue", disabled: server.isEmpty) }
     }
 
     @ViewBuilder private func credentials(_ prepared: (client: ZammadClient, info: ZammadClient.ServerInfo)) -> some View {
@@ -96,12 +96,12 @@ struct LoginView: View {
                     .textContentType(.oneTimeCode)
                     .keyboardType(twoFactorMethod == "recovery_codes" ? .asciiCapable : .numberPad)
             }
-            actionButton("Sign In", disabled: username.isEmpty || password.isEmpty || (twoFactorMethod != nil && code.isEmpty))
         } header: {
             Text(prepared.info.microsoft ? "Or with Username and Password" : "Username and Password")
         } footer: {
             Text("Your password is not stored. The app stays signed in until you sign out.")
         }
+        Section { actionButton("Sign In", disabled: username.isEmpty || password.isEmpty || (twoFactorMethod != nil && code.isEmpty)) }
     }
 
     private func actionButton(_ title: LocalizedStringKey, disabled: Bool) -> some View {
@@ -118,7 +118,7 @@ struct LoginView: View {
         }
         .buttonStyle(.glassProminent)
         .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 0, trailing: 0))
+        .listRowInsets(EdgeInsets())
         .disabled(busy || disabled)
     }
 

@@ -75,6 +75,7 @@ struct ZammadClient {
     static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.keyEncodingStrategy = .convertToSnakeCase
+        e.dateEncodingStrategy = .iso8601
         return e
     }()
 
@@ -111,7 +112,14 @@ struct ZammadClient {
     }
 
     func send<T: Decodable>(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: (any Encodable)? = nil) async throws -> T {
+        let started = ContinuousClock.now
         let (data, status) = try await perform(makeRequest(method, path, query: query, body: body))
+        let waited = ContinuousClock.now - started
+        defer {
+            #if DEBUG
+            fputs("TM \(Date.now.formatted(.dateTime.hour().minute().second())) \(method) \(path) \(query.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")) -> \(status), \(data.count / 1024) KB, network \(waited), total \(ContinuousClock.now - started)\n", stderr)
+            #endif
+        }
         guard (200..<300).contains(status) else {
             let message = switch status {
             case 401: "You have been signed out. Please sign in again."
@@ -199,9 +207,9 @@ struct ZammadClient {
         try await send("ticket_articles", method: "POST", query: [.init(name: "expand", value: "true")], body: draft)
     }
 
-    func update(ticket id: Int, stateID: Int? = nil, priorityID: Int? = nil, ownerID: Int? = nil) async throws -> Ticket {
+    func update(ticket id: Int, stateID: Int? = nil, priorityID: Int? = nil, ownerID: Int? = nil, pendingTime: Date? = nil) async throws -> Ticket {
         try await send("tickets/\(id)", method: "PUT", query: [.init(name: "expand", value: "true")],
-                       body: TicketChange(stateId: stateID, priorityId: priorityID, ownerId: ownerID))
+                       body: TicketChange(stateId: stateID, priorityId: priorityID, ownerId: ownerID, pendingTime: pendingTime))
     }
 
     /// Users with roles and group access; the caller keeps those who can own a ticket (`User.canOwn`).

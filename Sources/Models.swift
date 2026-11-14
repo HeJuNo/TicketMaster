@@ -16,6 +16,7 @@ struct Ticket: Codable, Identifiable, Hashable {
     var groupId: Int?
     var articleCount: Int?
     var createdAt: Date?
+    var pendingTime: Date?
     var updatedAt: Date
 }
 
@@ -30,7 +31,15 @@ struct Article: Codable, Identifiable, Hashable {
     var type: String?
     var sender: String?
     var createdBy: String?
+    var createdById: Int?
     var createdAt: Date
+
+    /// Display name in `from`: "Name <address>" becomes "Name"; "Name via Group <address>" keeps its "via" part out.
+    var fromName: String? {
+        guard var name = from?.replacing(/\s*<[^>]*>/, with: "").trimmingCharacters(in: .whitespaces.union(.init(charactersIn: "\""))), !name.isEmpty else { return nil }
+        name = name.replacing(/\s+via(\s.*)?$/, with: "")  // "Emma via Support <addr>" is sent on behalf of a group
+        return name.isEmpty ? nil : name
+    }
 
     var text: String { contentType == "text/html" ? HTML.plainText(body) : body }
     var isCustomer: Bool { sender == "Customer" }
@@ -40,6 +49,9 @@ struct TicketState: Codable, Identifiable, Hashable {
     let id: Int
     var name: String
     var active: Bool
+
+    /// "pending reminder" and "pending close" need a date: Zammad rejects them without `pending_time`.
+    var needsPendingTime: Bool { name.lowercased().hasPrefix("pending") }
 }
 
 struct TicketPriority: Codable, Identifiable, Hashable {
@@ -109,6 +121,7 @@ struct OverviewResult: Decodable {
         var customerId: Int?
         var articleCount: Int?
         var createdAt: Date?
+        var pendingTime: Date?
         var updatedAt: Date
     }
 
@@ -121,7 +134,7 @@ struct OverviewResult: Decodable {
                 group: r.groupId.flatMap { assets.groups?[String($0)]?.name },
                 customer: r.customerId.flatMap { assets.users?[String($0)]?.displayName },
                 owner: r.ownerId == User.nobodyID ? "-" : r.ownerId.flatMap { assets.users?[String($0)]?.displayName },
-                ownerId: r.ownerId, groupId: r.groupId, articleCount: r.articleCount, createdAt: r.createdAt, updatedAt: r.updatedAt)
+                ownerId: r.ownerId, groupId: r.groupId, articleCount: r.articleCount, createdAt: r.createdAt, pendingTime: r.pendingTime, updatedAt: r.updatedAt)
         }
     }
 }
@@ -131,6 +144,7 @@ struct TicketChange: Encodable {
     var stateId: Int?
     var priorityId: Int?
     var ownerId: Int?
+    var pendingTime: Date?
 }
 
 /// New article for `POST /api/v1/ticket_articles`.

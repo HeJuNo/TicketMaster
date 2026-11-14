@@ -10,6 +10,10 @@ struct TicketListView: View {
     @State private var tickets: [Ticket] = []
     @State private var loaded = false
     @State private var error: String?
+    @State private var visibleCount = TicketListView.batch
+
+    /// Rows are added in batches as the end of the list comes into view, so the first screen appears at once.
+    private static let batch = 40
 
     private var shown: [Ticket] {
         let found = search.trimmingCharacters(in: .whitespaces).isEmpty ? tickets : tickets.filter { $0.matches(search) }
@@ -17,9 +21,11 @@ struct TicketListView: View {
     }
 
     var body: some View {
-        List(shown, selection: $selection) { ticket in
+        List(loaded ? Array(shown.prefix(visibleCount)) : Self.placeholders, selection: $selection) { ticket in
             NavigationLink(value: ticket) { TicketRow(ticket: ticket) }
                 .listRowInsets(EdgeInsets())
+                .redacted(reason: loaded ? [] : .placeholder)
+                .task { if loaded, ticket.id == shown.prefix(visibleCount).last?.id { visibleCount += Self.batch } }
                 .swipeActions(edge: .leading) {
                     if let me = model.me, ticket.ownerId != me.id {
                         Button("Assign to Me", systemImage: "person.crop.circle.badge.checkmark") { Task { await assign(ticket, to: me) } }
@@ -34,15 +40,19 @@ struct TicketListView: View {
                 ContentUnavailableView("No Tickets", systemImage: "tray", description: Text("Nothing in “\(overview.name)”."))
             } else if loaded, shown.isEmpty {
                 ContentUnavailableView.search(text: search)
-            } else if !loaded {
-                ProgressView()
             }
         }
         .navigationTitle(overview.name)
         .navigationSubtitle(loaded ? "\(shown.count) of \(tickets.count) tickets" : "")
         .searchable(text: $search, prompt: "Search These Tickets")
+        .onChange(of: search) { visibleCount = Self.batch }
+        .onChange(of: sort) { visibleCount = Self.batch }
         .refreshable { await load() }
-        .task { await load() }
+        .task {
+            // Show the last result at once; the server needs a few seconds for big overviews.
+            if let cached = model.cachedTickets[overview.id] { tickets = cached; loaded = true }
+            await load()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -66,6 +76,12 @@ struct TicketListView: View {
         }
     }
 
+    /// Grey skeleton rows while the first load runs.
+    private static let placeholders = (1...10).map {
+        Ticket(id: -$0, number: "000000", title: "Loading the ticket title", stateId: 0, priorityId: 0, state: "open", customer: "Customer name",
+               owner: "-", updatedAt: .now)
+    }
+
     private func assign(_ ticket: Ticket, to me: User) async {
         guard let client = model.client, let updated = try? await client.update(ticket: ticket.id, ownerID: me.id),
               let index = tickets.firstIndex(where: { $0.id == ticket.id }) else { return }
@@ -76,6 +92,7 @@ struct TicketListView: View {
         guard let client = model.client else { return }
         do {
             tickets = try await client.tickets(in: overview, states: model.states, priorities: model.priorities)
+            model.cachedTickets[overview.id] = tickets
             error = nil
         } catch is CancellationError {
             return

@@ -114,16 +114,16 @@ enum Demo {
     nonisolated static let articles = #"""
     [{"id":9,"ticket_id":2,"from":"David Bell <david@example.com>","to":"order@chrispresso.com","subject":null,"content_type":"text/html",
       "body":"Hi,<br>\n<br>\n<u>please send me:</u><br>\n1 x Café Kopi susu<br>\n4 x Viennese melange<br>\n<br>\n<u>Delivery Address:</u><br>\nDavid Bell<br>\nEiffel Tower<br>\n5 Avenue Anatole France<br>\n75007 Paris<br>\n<span class=\"js-signatureMarker\"></span>\n<br>\nDavid Bell",
-      "internal":false,"type":"email","sender":"Customer","created_by":"david@example.com","created_at":"2026-11-12T11:57:18.068Z"},
+      "internal":false,"type":"email","sender":"Customer","created_by":"david@example.com","created_by_id":10,"created_at":"2026-11-12T11:57:18.068Z"},
      {"id":10,"ticket_id":2,"from":"Emma Taylor","to":null,"subject":null,"content_type":"text/plain",
       "body":"Melange is out of stock until Monday – ask David whether he wants to wait.","internal":true,"type":"note","sender":"Agent",
-      "created_by":"emma@chrispresso.com","created_at":"2026-11-12T13:02:00.000Z"},
+      "created_by":"emma@chrispresso.com","created_by_id":3,"created_at":"2026-11-12T13:02:00.000Z"},
      {"id":11,"ticket_id":2,"from":"Emma Taylor via <order@chrispresso.com>","to":"David Bell <david@example.com>","subject":null,"content_type":"text/html",
-      "body":"<p>Hi David,</p><p>nice, we will ship it to your delivery address. You will get it till Wednesday.</p><p>--<br>Greetings,<br>Emma Taylor</p>",
-      "internal":false,"type":"email","sender":"Agent","created_by":"emma@chrispresso.com","created_at":"2026-11-13T07:57:18.121Z"}]
+      "body":"<p>Hi David,</p><p>nice, we will ship it to your delivery address. You will get it till Wednesday.</p><p>--<br>Greetings,<br>Emma Taylor</p><div class=\"gmail_quote\"><div>On Thu, Nov 12, 2026 at 12:57 PM David Bell &lt;david@example.com&gt; wrote:</div><blockquote><p>Hi, please send me 1 x Café Kopi susu and 4 x Viennese melange.</p></blockquote></div>",
+      "internal":false,"type":"email","sender":"Agent","created_by":"emma@chrispresso.com","created_by_id":3,"created_at":"2026-11-13T07:57:18.121Z"}]
     """#
 
-    nonisolated static let created = #"{"id":33,"ticket_id":2,"from":"Emma Taylor","to":"David Bell <david@example.com>","subject":null,"content_type":"text/plain","body":"Thanks!","internal":false,"type":"email","sender":"Agent","created_by":"emma@chrispresso.com","created_at":"2026-11-13T09:00:00.000Z"}"#
+    nonisolated static let created = #"{"id":33,"ticket_id":2,"from":"Emma Taylor","to":"David Bell <david@example.com>","subject":null,"content_type":"text/plain","body":"Thanks!","internal":false,"type":"email","sender":"Agent","created_by":"emma@chrispresso.com","created_by_id":3,"created_at":"2026-11-13T09:00:00.000Z"}"#
 }
 
 /// Serves `Demo.respond(to:)` instead of the network.

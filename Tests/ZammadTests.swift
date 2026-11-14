@@ -68,6 +68,38 @@ import Testing
         #expect(tickets[0].matches("order david") && !tickets[0].matches("espresso") && tickets[1].matches("SERVICE desk"))
     }
 
+    @Test func quotedHistoryIsSplitOff() {
+        let wrote = BodyParts(body: "Thanks, done!\n\nOn Thu, Nov 12, 2026 at 10:00 AM David Bell\n<david@example.com> wrote:\n> Please send it\n> soon", isHTML: false)
+        #expect(wrote.main == "Thanks, done!" && wrote.quoted.hasPrefix("On Thu") && wrote.quoted.hasSuffix("soon"))
+        #expect(BodyParts(body: "Erledigt.\n\nAm 12.11.2026 um 10:00 schrieb David Bell <david@example.com>:\nBitte senden", isHTML: false).main == "Erledigt.")
+        let outlook = BodyParts(body: "Okay.\n\nVon: David Bell\nGesendet: Donnerstag\nAn: Emma\nBetreff: Bestellung\n\nAlt", isHTML: false)
+        #expect(outlook.main == "Okay." && outlook.quoted.hasPrefix("Von:"))
+        let separator = BodyParts(body: "Fine\n-----Original Message-----\nFrom: x", isHTML: false)
+        #expect(separator.main == "Fine")
+        let html = BodyParts(body: #"<div>Reply text</div><div class="gmail_quote"><div>On Thu David wrote:</div><blockquote>old text</blockquote></div>"#, isHTML: true)
+        #expect(html.main == "Reply text" && html.quoted.contains("old text"))
+        let apple = BodyParts(body: "<p>New</p><blockquote type=\"cite\"><p>Old</p></blockquote>", isHTML: true)
+        #expect(apple.main == "New" && apple.quoted == "Old")
+        #expect(BodyParts(body: "Just a plain message", isHTML: false) == BodyParts(main: "Just a plain message"))
+        #expect(BodyParts(body: "> only a quote", isHTML: false) == BodyParts(main: "> only a quote"))  // never leave an empty message
+    }
+
+    @Test func pendingStatesNeedADateAndSendIt() throws {
+        #expect(TicketState(id: 3, name: "pending reminder", active: true).needsPendingTime)
+        #expect(TicketState(id: 7, name: "pending close", active: true).needsPendingTime)
+        #expect(!TicketState(id: 2, name: "open", active: true).needsPendingTime)
+        let date = ISO8601DateFormatter().date(from: "2026-11-20T09:30:00Z")!
+        let json = try #require(JSONSerialization.jsonObject(with: ZammadClient.encoder.encode(TicketChange(stateId: 3, pendingTime: date))) as? [String: Any])
+        #expect(json["pending_time"] as? String == "2026-11-20T09:30:00Z" && json["state_id"] as? Int == 3)
+    }
+
+    @Test func articleAuthorComesFromTheAgentOrTheMailHeader() async throws {
+        let articles = try await Demo.client.articles(ticket: 2)
+        #expect(articles.map(\.createdById) == [10, 3, 3])
+        #expect(articles[0].fromName == "David Bell" && articles[2].fromName == "Emma Taylor")
+        #expect(Article(id: 1, from: "\"Anna K.\" <a@x.at>", body: "", contentType: "text/plain", internal: false, createdAt: .now).fromName == "Anna K.")
+    }
+
     @Test func agentsAreLoadedOnceForAllTickets() async throws {
         let model = AppModel()
         try await model.connect(Demo.client)
